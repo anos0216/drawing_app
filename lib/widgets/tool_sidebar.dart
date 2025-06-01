@@ -9,25 +9,53 @@ class ToolSidebar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentTool = ref.watch(currentToolProvider);
+    final strokeWidth = ref.watch(strokeWidthProvider);
 
     return Container(
       width: 60,
       color: Colors.grey[200],
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: DrawToolType.values.map((tool) {
-          final isActive = currentTool == tool;
-          return IconButton(
-            icon: Icon(
-              _getIconForTool(tool),
-              color: isActive ? Colors.deepPurple : Colors.black,
+        children: [
+          // Tool Buttons
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: DrawToolType.values.map((tool) {
+                  final isActive = currentTool == tool;
+                  return IconButton(
+                    icon: Icon(
+                      _getIconForTool(tool),
+                      color: isActive ? Colors.deepPurple : Colors.black,
+                    ),
+                    onPressed: () {
+                      ref.read(currentToolProvider.notifier).state = tool;
+                    },
+                    tooltip: tool.name,
+                  );
+                }).toList(),
+              ),
             ),
-            onPressed: () {
-              ref.read(currentToolProvider.notifier).state = tool;
-            },
-            tooltip: tool.name,
-          );
-        }).toList(),
+          ),
+
+          const Divider(),
+
+          // Stroke Width Slider
+          RotatedBox(
+            quarterTurns: -1,
+            child: Slider(
+              min: 1,
+              max: 20,
+              value: strokeWidth,
+              onChanged: (value) {
+                ref.read(strokeWidthProvider.notifier).state = value;
+              },
+              activeColor: Colors.deepPurple,
+              inactiveColor: Colors.grey,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

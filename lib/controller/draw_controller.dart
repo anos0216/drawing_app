@@ -15,14 +15,9 @@ final drawControllerProvider = Provider<DrawController>(
 final currentToolProvider = StateProvider<DrawToolType>(
   (ref) => DrawToolType.pencil,
 );
-
 final currentColorProvider = StateProvider<Color>((ref) => Colors.black);
-
 final strokeWidthProvider = StateProvider<double>((ref) => 2.0);
-
-final fillColorProvider = StateProvider<Color?>(
-  (ref) => null, // null means no fill
-);
+final fillColorProvider = StateProvider<Color?>((ref) => null);
 
 class DrawController extends StateNotifier<List<DrawElement>> {
   DrawController(this.ref) : super([]);
@@ -34,33 +29,178 @@ class DrawController extends StateNotifier<List<DrawElement>> {
   ShapeDrawElement? _currentShape;
   DateTime? _lastTapTime;
 
-  // Unified current element
-  DrawElement? get currentElement =>
-      _currentFreeDraw ?? _currentPenPath ?? _currentShape;
-
   DrawElement? _selectedElement;
+  int? _selectedPointIndex;
+  String? _selectedHandle; // 'anchor', 'handleIn', 'handleOut'
 
   DrawElement? get selectedElement => _selectedElement;
 
+  DrawElement? get currentElement =>
+      _currentFreeDraw ?? _currentPenPath ?? _currentShape;
+
+  bool _isDraggingPoint = false;
+
+void startDragAt(Offset point) {
+  // Attempt to select a point or handle at the given position
+  selectElementAt(point);
+
+  // If a PenDrawElement's point or handle is selected, start dragging that point
+  if (_selectedElement is PenDrawElement && _selectedPointIndex != null && _selectedHandle != null) {
+    _isDraggingPoint = true;
+  } else {
+    // If no point/handle selected, consider dragging the whole element
+    _isDraggingPoint = false;
+  }
+}
+
+void dragTo(Offset newPosition, Offset delta) {
+  if (_isDraggingPoint && _selectedElement is PenDrawElement && _selectedPointIndex != null && _selectedHandle != null) {
+    final pen = _selectedElement as PenDrawElement;
+    final point = pen.points[_selectedPointIndex!];
+
+    switch (_selectedHandle) {
+      case 'anchor':
+        point.anchor += delta;
+        // Move handles together with anchor to keep curve shape consistent
+        if (point.handleIn != null) point.handleIn = point.handleIn! + delta;
+        if (point.handleOut != null) point.handleOut = point.handleOut! + delta;
+        break;
+      case 'handleIn':
+        if (point.handleIn != null) {
+          point.handleIn = point.handleIn! + delta;
+        }
+        break;
+      case 'handleOut':
+        if (point.handleOut != null) {
+          point.handleOut = point.handleOut! + delta;
+        }
+        break;
+    }
+    // Trigger UI update
+    state = [...state];
+  } else if (_selectedElement != null && !_isDraggingPoint) {
+    // Move entire selected element if no point dragging active
+    _selectedElement!.move(delta);
+    state = [...state];
+  }
+}
+
+void endDrag() {
+  _isDraggingPoint = false;
+}
+
+
   void selectElementAt(Offset point) {
+    // Check if the same thing is already selected — toggle to deselect
+    if (_selectedElement != null) {
+      if (_selectedElement!.contains(point)) {
+        // If no specific handle is tapped, toggle deselect
+        if (_selectedPointIndex == null && _selectedHandle == null) {
+          deselect();
+          return;
+        }
+
+        // If it's a PenDrawElement, check for same point/handle again
+        if (_selectedElement is PenDrawElement) {
+          final pen = _selectedElement as PenDrawElement;
+          final selectedPoint = pen.points[_selectedPointIndex ?? -1];
+
+          if (_selectedHandle == 'anchor' &&
+              (selectedPoint.anchor - point).distance < 10) {
+            deselect();
+            return;
+          }
+          if (_selectedHandle == 'handleIn' &&
+              selectedPoint.handleIn != null &&
+              (selectedPoint.handleIn! - point).distance < 10) {
+            deselect();
+            return;
+          }
+          if (_selectedHandle == 'handleOut' &&
+              selectedPoint.handleOut != null &&
+              (selectedPoint.handleOut! - point).distance < 10) {
+            deselect();
+            return;
+          }
+        }
+      }
+    }
+
+    // Fresh selection attempt
     for (final element in state.reversed) {
-      if (element.contains(point)) {
+      if (element is PenDrawElement) {
+        for (int i = 0; i < element.points.length; i++) {
+          final p = element.points[i];
+          if ((p.anchor - point).distance < 10) {
+            _selectedElement = element;
+            _selectedPointIndex = i;
+            _selectedHandle = 'anchor';
+            state = [...state];
+            return;
+          }
+          if (p.handleIn != null && (p.handleIn! - point).distance < 10) {
+            _selectedElement = element;
+            _selectedPointIndex = i;
+            _selectedHandle = 'handleIn';
+            state = [...state];
+            return;
+          }
+          if (p.handleOut != null && (p.handleOut! - point).distance < 10) {
+            _selectedElement = element;
+            _selectedPointIndex = i;
+            _selectedHandle = 'handleOut';
+            state = [...state];
+            return;
+          }
+        }
+      } else if (element.contains(point)) {
         _selectedElement = element;
-        state = [...state]; // repaint
+        _selectedPointIndex = null;
+        _selectedHandle = null;
+        state = [...state];
         return;
       }
     }
-    _selectedElement = null;
-    state = [...state]; // clear selection
+
+    // If nothing was hit
+    deselect();
   }
 
   void moveSelectedElement(Offset delta) {
-    _selectedElement?.move(delta);
+    if (_selectedElement == null) return;
+
+    if (_selectedElement is PenDrawElement &&
+        _selectedPointIndex != null &&
+        _selectedHandle != null) {
+      final pen = _selectedElement as PenDrawElement;
+      final point = pen.points[_selectedPointIndex!];
+
+      switch (_selectedHandle) {
+        case 'anchor':
+          point.anchor += delta;
+          break;
+        case 'handleIn':
+          if (point.handleIn != null) {
+            point.handleIn = point.handleIn! + delta;
+          }
+          break;
+        case 'handleOut':
+          if (point.handleOut != null) {
+            point.handleOut = point.handleOut! + delta;
+          }
+          break;
+      }
+    } else {
+      _selectedElement?.move(delta);
+    }
+
     state = [...state];
   }
 
   void deselect() {
     _selectedElement = null;
+    _selectedPointIndex = null;
+    _selectedHandle = null;
     state = [...state];
   }
 
@@ -132,7 +272,7 @@ class DrawController extends StateNotifier<List<DrawElement>> {
       _currentPenPath = PenDrawElement(
         color: color,
         strokeWidth: strokeWidth,
-        points: [point],
+        points: [PenPoint(anchor: point)],
       );
     } else if (isDoubleTap) {
       if (_currentPenPath!.points.length >= 2) {
@@ -140,7 +280,7 @@ class DrawController extends StateNotifier<List<DrawElement>> {
       }
       _currentPenPath = null;
     } else {
-      _currentPenPath!.points.add(point);
+      _currentPenPath!.points.add(PenPoint(anchor: point));
       state = [...state];
     }
   }

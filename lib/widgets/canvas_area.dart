@@ -13,58 +13,67 @@ class CanvasArea extends ConsumerStatefulWidget {
 
 class _CanvasAreaState extends ConsumerState<CanvasArea> {
   late Size _canvasSize;
+  Offset? _lastPanPosition;
 
   @override
   Widget build(BuildContext context) {
-    final controller = ref.watch(drawControllerProvider);
     final drawElements = ref.watch(drawElementsProvider);
-    final tool = ref.watch(currentToolProvider);
-
-    final current = controller.currentElement;
+    final currentTool = ref.watch(currentToolProvider);
+    final controller = ref.read(drawControllerProvider); // read to avoid rebuild on controller change
+    final currentElement = controller.currentElement;
 
     final allElements = [...drawElements];
-    if (current != null) allElements.add(current);
+    if (currentElement != null) {
+      allElements.add(currentElement);
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         _canvasSize = constraints.biggest;
+
         return GestureDetector(
-         onPanStart: (details) {
-    final tool = ref.read(currentToolProvider);
-    final controller = ref.read(drawControllerProvider);
+          onPanStart: (details) {
+            final local = _clamp(details.localPosition);
+            _lastPanPosition = local;
 
-    if (tool == DrawToolType.selection) {
-      controller.selectElementAt(details.localPosition);
-    } else {
-      controller.startDrawing(details.localPosition, context.size!);
-    }
-  },
-  onPanUpdate: (details) {
-    final tool = ref.read(currentToolProvider);
-    final controller = ref.read(drawControllerProvider);
+            if (currentTool == DrawToolType.selection) {
+              controller.startDragAt(local);
+            } else {
+              controller.startDrawing(local, _canvasSize);
+            }
+          },
+          onPanUpdate: (details) {
+            final local = _clamp(details.localPosition);
+            final delta = local - (_lastPanPosition ?? local);
+            _lastPanPosition = local;
 
-    if (tool == DrawToolType.selection && controller.selectedElement != null) {
-      controller.moveSelectedElement(details.delta);
-    } else {
-      controller.updateDrawing(details.localPosition);
-    }
-  },
-  onPanEnd: (_) {
-    final tool = ref.read(currentToolProvider);
-    if (tool != DrawToolType.selection) {
-      ref.read(drawControllerProvider).endDrawing();
-    }
-  },
-          onTapDown:
-              tool == DrawToolType.pen
-                  ? (details) {
-                    final local = _clamp(details.localPosition);
-                    controller.tapOnCanvas(local);
-                  }
-                  : null,
+            if (currentTool == DrawToolType.selection && controller.selectedElement != null) {
+              controller.dragTo(local, delta);
+            } else {
+              controller.updateDrawing(local);
+            }
+          },
+          onPanEnd: (_) {
+            _lastPanPosition = null;
+
+            if (currentTool == DrawToolType.selection) {
+              controller.endDrag();
+            } else {
+              controller.endDrawing();
+            }
+          },
+          onTapDown: currentTool == DrawToolType.pen
+              ? (details) {
+                  final local = _clamp(details.localPosition);
+                  controller.tapOnCanvas(local);
+                }
+              : null,
           child: CustomPaint(
             size: _canvasSize,
-            painter: DrawingPainter(elements: allElements),
+            painter: DrawingPainter(
+              elements: allElements,
+              selectedElement: controller.selectedElement,
+            ),
           ),
         );
       },

@@ -25,7 +25,7 @@ class DrawingScreen extends StatelessWidget {
                 ],
               ),
             ),
-           
+
             const ColorPicker(),
           ],
         ),

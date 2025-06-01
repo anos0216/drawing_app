@@ -7,5 +7,5 @@ enum DrawToolType {
   triangle,
   polygon,
   selection,
-  eraser
+  eraser,
 }

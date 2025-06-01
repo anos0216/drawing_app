@@ -15,7 +15,7 @@ class ColorPicker extends ConsumerWidget {
     Colors.purple,
     Colors.brown,
     Colors.pink,
-    Colors.indigo
+    Colors.indigo,
   ];
 
   @override
@@ -33,7 +33,10 @@ class ColorPicker extends ConsumerWidget {
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
-            border: selected ? Border.all(color: Colors.deepPurple, width: 3) : null,
+            border:
+                selected
+                    ? Border.all(color: Colors.deepPurple, width: 3)
+                    : null,
           ),
         ),
       );
@@ -46,9 +49,14 @@ class ColorPicker extends ConsumerWidget {
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
-            children: colors.map((c) => colorBox(c, c == strokeColor, () {
-              ref.read(currentColorProvider.notifier).state = c;
-            })).toList(),
+            children:
+                colors
+                    .map(
+                      (c) => colorBox(c, c == strokeColor, () {
+                        ref.read(currentColorProvider.notifier).state = c;
+                      }),
+                    )
+                    .toList(),
           ),
         ),
         const SizedBox(height: 8),
@@ -57,9 +65,11 @@ class ColorPicker extends ConsumerWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              ...colors.map((c) => colorBox(c, c == fillColor, () {
-                ref.read(fillColorProvider.notifier).state = c;
-              })),
+              ...colors.map(
+                (c) => colorBox(c, c == fillColor, () {
+                  ref.read(fillColorProvider.notifier).state = c;
+                }),
+              ),
               GestureDetector(
                 onTap: () => ref.read(fillColorProvider.notifier).state = null,
                 child: Container(
@@ -73,10 +83,10 @@ class ColorPicker extends ConsumerWidget {
                   ),
                   child: const Center(child: Icon(Icons.close, size: 18)),
                 ),
-              )
+              ),
             ],
           ),
-        )
+        ),
       ],
     );
   }
